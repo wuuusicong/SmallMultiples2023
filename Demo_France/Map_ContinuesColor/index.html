@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<style>
+    body{
+        max-width: 100%;
+        height: 100%;
+        background: #aeb8c2;
+    }
+    #main{
+        margin: auto;
+        /*background: #8cc8ff;*/
+        float: top;
+    }
+    #visBody {
+        background: #d3dde7;
+        margin: auto;
+    }
+    #container{
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    #mapScaleContainer{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    #selector{
+        width: 200px;
+        height: 800px;
+        /*background: #2f54eb;*/
+    }
+</style>
+<body>
+<div id="container">
+    <div>
+        <svg id="main"></svg>
+    </div>
+    <div id="mapScaleContainer">
+       <div>
+           <svg id="visBody"></svg>
+       </div>
+       <div id="slider-range">
+           <svg id="colorScale"></svg>
+       </div>
+    </div>
+    <div id="selector">
+        <div ></div>
+    </div>
+</div>
+
+</body>
+<link rel="stylesheet" href="jquery-ui.css">
+<script src="jquery.js"></script>
+<!--<script src="https://cdn.bootcdn.net/ajax/libs/d3/4.4.4/d3.min.js"></script>-->
+<!--<script src="https://cdn.bootcdn.net/ajax/libs/d3/5.0.2/d3.js"></script>-->
+<script src="d3.js"></script>
+<script src="jquery-ui.js"></script>
+<script>
+    //scale
+
+    let mapAll = [];//存储地图数据
+    let BirthData;//存储Case数据
+    async function getMapAndBirthData(labels_to_color){
+        const geoData = await d3.json("./public/Fr-mainland.geo.json")
+        BirthData = await d3.json("./public/numMapData.json")
+        console.log('geo:',geoData)
+        console.log(BirthData)
+        let width = 1000;
+        let height = 800;
+        d3.select('#visBody')
+        .attr("width",width)
+        .attr("height",height)
+         mapAll =  drawMap(geoData,BirthData)
+        let scale = labels_to_color
+       updateMapScale(mapAll,scale,BirthData["data"])
+    }
+    function drawMap(geoData,BirthData){
+        // let scale = labels_to_color
+        let svg = d3.select('#visBody')
+        let rectNum = 150
+        let width = rectNum;
+        let height = rectNum;
+        let pianyiXDistance = 200
+        let pianyiYDistance = 150
+        const projection = d3.geoMercator().fitExtent(
+            [
+                [0, 0],
+                [width, height],
+            ], geoData);
+        const pathGenerator = d3.geoPath()
+            .projection(projection)
+        let numberMap = BirthData["data"]
+        svg.selectAll(".mapItem")
+        .data(numberMap)
+        .enter()
+        .append("g")
+        .attr("transform",(item,index)=>{
+            let indexY = parseInt(index/5)
+            if(index>=5){
+                index = index%5
+            }
+            let tmpX = index*pianyiXDistance
+
+            return `translate(${index*pianyiXDistance},${pianyiYDistance*indexY})`
+        })
+        .selectAll(".geoPath");
+
+        BirthData["data"].forEach((item,index)=>{
+            let svg_g = svg.append("g")
+                .attr("transform",(item,index2)=>{
+                    let indexY = parseInt(index/5)
+                    if(index>=5){
+                        index = index%5
+                    }
+                    // let tmpX = index*pianyiXDistance
+                    return `translate(${index*pianyiXDistance},${pianyiYDistance*indexY})`
+                });
+           mapAll.push(drawItemMap(svg_g,geoData,pathGenerator))
+        })
+        return mapAll
+    }
+    function drawItemMap(svg,geoData,pathGenerator){
+        let mapItem = svg.selectAll(".geoPath")
+            .data(geoData.features)
+            .enter()
+            .append("path")
+            .attr("d",pathGenerator)
+            .attr("stroke-width",0.5)
+            .attr("stroke","#000000")
+            // .attr("fill",(item,index)=>{
+            //     return scale(data[index])
+            // })
+        return mapItem
+    }
+    function updateMapScale(mapAll,scale,data) {
+        console.log(mapAll)
+        data.forEach((item,index)=>{
+            // console.log(item)
+            mapAll[index]
+                .attr("fill",(item2,index2)=>{
+                    return scale(item[index2])
+                })
+        })
+    }
+    // return labels_to_color
+    function drawColorRect(text,interpolates,HeightY,labels){
+        var svg = d3.select("#main")
+        let width = 500;
+        let height = 1000;
+
+        let HeightYDistance = 25;
+        svg.attr("width",width)
+            .attr("height",height)
+        let tmpG = svg.append("g")
+        tmpG.append("text")
+            .text(text)
+            .attr("x",0)
+            .attr("y",HeightY)
+        // $("#response").html(result)
+        //颜色的插值方式(默认0,1)
+        let interpolate = d3.interpolate("#ffffff","purple")
+        const rectWidth = 1;
+        const rectNum = width-10;
+        // 长度与数值范围的映射
+        let linear = d3.scaleLinear()
+            .domain([0,rectNum])
+            .range([0,1])
+        interpolates.forEach((item,index)=>{
+            let SingeHueG = tmpG.append("g")
+                .attr("colorNum",interpolatesNum)
+                // .attr("fill","none")
+                // .attr("stroke","black")
+                // .attr("stroke-width",10)
+                .on("click",function (d) {
+                    d3.select(this)
+                    colorNum = parseInt(d3.select(this).attr("colorNum"))
+                    let labels_to_color = getColorScale(colorNum,labels)
+                    drawColorScale(labels)
+                    updateMapScale(mapAll,labels_to_color,BirthData["data"])
+                })
+            HeightY+=HeightYDistance
+            SingeHueG.selectAll(".rectG")
+                .data(d3.range(rectNum))
+                .enter()
+                .append("rect")
+                .attr("x",(d,i)=>i*rectWidth)
+                .attr("y",(item,index)=>{
+                    return HeightY
+                })
+                .attr("width",rectWidth)
+                .attr("height",20)
+                .attr("class","rectColor")
+                .style('fill',(d,i)=>{
+                    return item(linear(d))
+                })
+                .attr("stroke","none")
+                .text((d,i)=>d);
+            interpolatesNum+=1
+        })
+
+        return HeightY
+
+    }
+    function getColorScale(colorIndex,labels2) {
+        let currentInterpolate = allInterpolate[colorIndex];
+        console.log(allInterpolate)
+        console.log(currentInterpolate)
+        let colorMap = labels2.map((d,i)=>{
+            console.log(d)
+            return currentInterpolate(d)
+        })
+        console.log('colorMap',colorMap)
+        console.log('labels',labels)
+
+        let labels_to_color = d3.scaleLinear()
+            .domain(labels)
+            .range(colorMap);
+        return labels_to_color;
+    }
+    function drawColorScale(labels2){
+        $("#colorScale").empty();
+        console.log(labels)
+        let interpolate = allInterpolate[colorNum]
+        let width = 1000;
+        let height = 40;
+        const rectWidth = 1;
+        const rectNum = width-10;
+       d3.select("#slider-range")
+        .style("width",rectNum+"px");
+        let linear = d3.scaleLinear()
+            .domain([0,rectNum])
+            .range([0,1])
+        let colorScaleSvg = d3.select("#colorScale")
+            .attr("width",width)
+            .attr("height",height);
+        let dataTmp  =  colorScaleSvg.selectAll(".rect")
+            .data(d3.range(rectNum))
+            .enter();
+        dataTmp
+            .append("rect")
+            .attr("x",(d,i)=>i*rectWidth)
+            .attr("y",0)
+            .attr("width",rectWidth)
+            .attr("height",20)
+            .attr("class","rectColor")
+            .style('fill',(d,i)=>{
+                return interpolate(linear(d))
+            })
+            .attr("stroke","none")
+        let g_colorText = colorScaleSvg.append("g")
+        .attr("id","g_colorText");
+        g_colorText.selectAll("labelColor")
+            .data(labels2)
+            .enter()
+            .append("text")
+            .attr("x",(d,i)=>linear.invert(d))
+            .attr("y",35)
+            .text((d,i)=>labels[i])
+            .attr("font-size",15)
+    }
+    function drawColorText(labels2) {
+        let width = 1000;
+        const rectNum = width-10;
+        console.log('labels2',labels2)
+        let linear = d3.scaleLinear()
+            .domain([0,rectNum])
+            .range([0,1])
+        //$("#g_colorText text").remove()
+        $("#g_colorText").empty()
+
+        let g_colorText = d3.select("#g_colorText")
+        g_colorText.selectAll("labelColor")
+            .data(labels2)
+            .enter()
+            .append("text")
+            .attr("x",(d,i)=>linear.invert(d))
+            .attr("y",35)
+            .text((d,i)=>labels[i])
+            .attr("font-size",15)
+    }
+    function sliderController(labels){
+        let values = labels.slice(1,labels.length-1);
+        $("#slider-range").slider({
+            range: false,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            values: values,
+            slide: function (event, ui) {
+                if (ui.values[0] >= ui.values[1] || ui.values[1] >= ui.values[2] || ui.values[2] >= ui.values[3] || ui.values[3] >= ui.values[4]) {
+                    return false;
+                }
+                // console.log(ui.values)
+                console.log('colorNum:')
+                console.log(ui.values)
+
+                let newLabels = ui.values
+                newLabels.unshift(0)
+                newLabels.push(1)
+                drawColorText(newLabels)
+                labels_to_color = getColorScale(colorNum,newLabels)
+                updateMapScale(mapAll,labels_to_color,BirthData["data"])
+                // drawColorScale(newLabels)
+                // $(ui.handle).find(".val").html(ui.value);
+                // $("#val1").val(ui.values[0]);
+                // $("#val2").val(ui.values[1]);
+                // $("#val3").val(ui.values[2]);
+                // $("#val4").val(ui.values[3]);
+            }
+        });
+    }
+    let interpolates = [
+        d3.interpolateGreens,
+        d3.interpolate("#ffffff","purple"),
+        d3.interpolatePurples,
+        d3.interpolateBlues,
+        d3.interpolateGreys,
+        d3.interpolateReds,
+    ]
+    let multiHue = [
+        d3.interpolateBuGn,
+        d3.interpolateViridis,
+        d3.interpolateInferno,
+        d3.interpolateMagma,
+        d3.interpolatePlasma,
+        d3.interpolateWarm,
+        d3.interpolateCool,
+        d3.interpolateBuPu,
+        d3.interpolateGnBu,
+        d3.interpolateOrRd,
+        d3.interpolatePuBuGn,
+        d3.interpolatePuBu,
+        d3.interpolatePuRd,
+        d3.interpolateYlGnBu,
+        d3.interpolateYlGn,
+        d3.interpolateYlOrBr,
+        d3.interpolateYlOrRd,
+        d3.interpolateRainbow,
+    ];
+    let divergingHue = [
+        d3.interpolateBrBG,
+        d3.interpolatePRGn,
+        d3.interpolatePiYG,
+        d3.interpolatePuOr,
+        d3.interpolateRdBu,
+        d3.interpolateRdYlGn,
+        d3.interpolateSpectral
+    ]
+
+    let allInterpolate = [...interpolates,...multiHue,...divergingHue]
+    console.log(allInterpolate)
+    let interpolatesNum = 0;
+    var labels;
+    let colorNum;
+
+            // console.log(result)
+            // console.log($("#response"))
+            let HeightY = 20;
+            //labels 可由后台计算出
+            labels = [0,0.3,0.3,0.5,0.6,1];
+            HeightY = drawColorRect("Sequential (Single Hue)",interpolates,HeightY,labels)
+            HeightY = drawColorRect("Sequential (Multi-Hue)",multiHue,HeightY+60,labels)
+            // drawColorRect(text,interpolates)
+            drawColorRect("Diverging",divergingHue,HeightY+60,labels)
+            colorNum = 0;
+            let labels_to_color = getColorScale(colorNum,labels)
+            drawColorScale(labels)
+            getMapAndBirthData(labels_to_color)
+            sliderController(labels)
+
+
+
+</script>
+</html>
